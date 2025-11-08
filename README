@@ -1,0 +1,30 @@
+SHELL SCRIPTS COLLECTION
+
+Utility scripts for media processing and file management.
+
+AUDIO/
+  retitle-mp3.sh                  Add prefix to MP3 title metadata
+
+IMAGE/
+  convert-format.sh               Convert between image formats (PNG→JPG)
+  png-crush.sh                    Optimize PNGs by removing metadata
+  resize-crop-square.sh           Resize and crop to exact square
+  resize-images.sh                Resize with quality/DPI control
+  resize-with-background.sh       Fit images with background padding
+  transparent-to-white.sh         Replace PNG transparency with solid color
+
+VIDEO/
+  convert-prores.sh               Convert to Apple ProRes (5 profiles)
+  create-gif.sh                   Create animated GIF from PNG sequence
+  gif-to-video.sh                 Convert GIF to MP4
+  png-sequence-to-video.sh        Create video from PNG frames
+  time-stretch.sh                 Speed up/slow down video
+  ts-to-mp4.sh                    Convert .ts files to MP4
+  video-to-gif.sh                 Convert video to optimized GIF
+
+UTILS/
+  fix_filenames.sh                Fix broken Unicode characters in filenames
+
+USAGE
+  All scripts include help: ./script.sh (without arguments)
+  Most scripts accept directory/file paths as parameters
