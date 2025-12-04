@@ -1,0 +1,93 @@
+#!/bin/bash
+
+set -e
+
+# Default values
+SRC_DIR=""
+OUTPUT="concatenated.txt"
+CUSTOM_IGNORE=""
+PICK_EXT=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --ignore)
+            shift
+            while [[ $# -gt 0 && ! "$1" =~ ^-- ]]; do
+                CUSTOM_IGNORE="${CUSTOM_IGNORE}${CUSTOM_IGNORE:+|}$1"
+                shift
+            done
+            ;;
+        --pick)
+            shift
+            while [[ $# -gt 0 && ! "$1" =~ ^-- ]]; do
+                PICK_EXT="${PICK_EXT}${PICK_EXT:+|}$1"
+                shift
+            done
+            ;;
+        *)
+            if [ -z "$SRC_DIR" ]; then
+                SRC_DIR="$1"
+            else
+                OUTPUT="$1"
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Validate directory
+if [ -z "$SRC_DIR" ]; then
+    echo "Use: concat <directory> [output_file.txt] [--ignore ext1 ext2 ...] [--pick ext1 ext2 ...]"
+    echo ""
+    echo "Examples:"
+    echo "  concat src/ output.txt"
+    echo "  concat src/ --ignore txt md"
+    echo "  concat src/ --pick ts svelte"
+    echo "  concat src/ output.txt --ignore txt --pick js ts"
+    exit 1
+fi
+
+# Default ignore extensions
+DEFAULT_IGNORE="png|jpg|jpeg|gif|svg|ico|webp|bmp|tiff|mp3|mp4|wav|pdf|zip|tar|gz|exe|dll|so|dylib|woff|woff2|ttf|eot|lock|DS_Store"
+IGNORE_DIRS="node_modules|.git|__pycache__|.svelte-kit|build|dist|.next|venv|.venv|target|Packages"
+
+# Build final ignore pattern
+if [ -n "$CUSTOM_IGNORE" ]; then
+    IGNORE_EXT="${DEFAULT_IGNORE}|${CUSTOM_IGNORE}"
+else
+    IGNORE_EXT="$DEFAULT_IGNORE"
+fi
+
+> "$OUTPUT"
+
+# Build find command with filters
+if [ -n "$PICK_EXT" ]; then
+    # If --pick is specified, only include those extensions
+    find "$SRC_DIR" -type f | \
+        grep -Ev "/($IGNORE_DIRS)/" | \
+        grep -Ev '(^|/)\.' | \
+        grep -Ei "\.($PICK_EXT)$" | \
+        sort | \
+    while read -r file; do
+        echo "### FILE: $file ###" >> "$OUTPUT"
+        echo "" >> "$OUTPUT"
+        cat "$file" >> "$OUTPUT"
+        echo "" >> "$OUTPUT"
+    done
+else
+    # Otherwise, use ignore pattern
+    find "$SRC_DIR" -type f | \
+        grep -Ev "/($IGNORE_DIRS)/" | \
+        grep -Ev '(^|/)\.' | \
+        grep -Evi "\.($IGNORE_EXT)$" | \
+        sort | \
+    while read -r file; do
+        echo "### FILE: $file ###" >> "$OUTPUT"
+        echo "" >> "$OUTPUT"
+        cat "$file" >> "$OUTPUT"
+        echo "" >> "$OUTPUT"
+    done
+fi
+
+echo "✓ $OUTPUT ($(wc -l < "$OUTPUT") linhas)"

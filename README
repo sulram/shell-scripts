@@ -5,6 +5,9 @@ Utility scripts for media processing and file management.
 AUDIO/
   retitle-mp3.sh                  Add prefix to MP3 title metadata
 
+CODE/
+  concat                          Concatenate source files with filters
+
 IMAGE/
   convert-format.sh               Convert between image formats (PNG→JPG)
   png-crush.sh                    Optimize PNGs by removing metadata
