@@ -7,6 +7,7 @@ SRC_DIR=""
 OUTPUT="concatenated.txt"
 CUSTOM_IGNORE=""
 PICK_EXT=""
+CUSTOM_IGNORE_DIRS=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -15,6 +16,13 @@ while [[ $# -gt 0 ]]; do
             shift
             while [[ $# -gt 0 && ! "$1" =~ ^-- ]]; do
                 CUSTOM_IGNORE="${CUSTOM_IGNORE}${CUSTOM_IGNORE:+|}$1"
+                shift
+            done
+            ;;
+        --ignore-dirs)
+            shift
+            while [[ $# -gt 0 && ! "$1" =~ ^-- ]]; do
+                CUSTOM_IGNORE_DIRS="${CUSTOM_IGNORE_DIRS}${CUSTOM_IGNORE_DIRS:+|}$1"
                 shift
             done
             ;;
@@ -38,51 +46,63 @@ done
 
 # Validate directory
 if [ -z "$SRC_DIR" ]; then
-    echo "Use: concat <directory> [output_file.txt] [--ignore ext1 ext2 ...] [--pick ext1 ext2 ...]"
+    echo "Use: concat <directory> [output_file.txt] [--ignore ext1 ext2 ...] [--pick ext1 ext2 ...] [--ignore-dirs dir1 dir2 ...]"
     echo ""
     echo "Examples:"
     echo "  concat src/ output.txt"
     echo "  concat src/ --ignore txt md"
     echo "  concat src/ --pick ts svelte"
-    echo "  concat src/ output.txt --ignore txt --pick js ts"
+    echo "  concat src/ --ignore-dirs tests docs"
+    echo "  concat src/ output.txt --ignore txt --pick js ts --ignore-dirs coverage"
     exit 1
 fi
 
 # Default ignore extensions
 DEFAULT_IGNORE="png|jpg|jpeg|gif|svg|ico|webp|bmp|tiff|mp3|mp4|wav|pdf|zip|tar|gz|exe|dll|so|dylib|woff|woff2|ttf|eot|lock|DS_Store"
-IGNORE_DIRS="node_modules|.git|__pycache__|.svelte-kit|build|dist|.next|venv|.venv|target|Packages"
+DEFAULT_IGNORE_DIRS="node_modules|.git|__pycache__|.svelte-kit|build|dist|.next|venv|.venv|target|Packages"
 
-# Build final ignore pattern
+# Build final ignore patterns
 if [ -n "$CUSTOM_IGNORE" ]; then
     IGNORE_EXT="${DEFAULT_IGNORE}|${CUSTOM_IGNORE}"
 else
     IGNORE_EXT="$DEFAULT_IGNORE"
 fi
 
+if [ -n "$CUSTOM_IGNORE_DIRS" ]; then
+    IGNORE_DIRS="${DEFAULT_IGNORE_DIRS}|${CUSTOM_IGNORE_DIRS}"
+else
+    IGNORE_DIRS="$DEFAULT_IGNORE_DIRS"
+fi
+
 > "$OUTPUT"
+
+# Get absolute path of output file to exclude it from search
+OUTPUT_ABS=$(cd "$(dirname "$OUTPUT")" 2>/dev/null && pwd || pwd)/$(basename "$OUTPUT")
 
 # Build find command with filters
 if [ -n "$PICK_EXT" ]; then
     # If --pick is specified, only include those extensions
-    find "$SRC_DIR" -type f | \
+    find "$SRC_DIR" -type f -not -path '*/\.*' | \
         grep -Ev "/($IGNORE_DIRS)/" | \
-        grep -Ev '(^|/)\.' | \
         grep -Ei "\.($PICK_EXT)$" | \
         sort | \
     while read -r file; do
+        # Skip output file
+        [ "$(cd "$(dirname "$file")" && pwd)/$(basename "$file")" = "$OUTPUT_ABS" ] && continue
         echo "### FILE: $file ###" >> "$OUTPUT"
         echo "" >> "$OUTPUT"
         cat "$file" >> "$OUTPUT"
         echo "" >> "$OUTPUT"
     done
 else
-    # Otherwise, use ignore pattern
-    find "$SRC_DIR" -type f | \
+    # Otherwise, use ignore pattern (include files without extensions)
+    find "$SRC_DIR" -type f -not -path '*/\.*' | \
         grep -Ev "/($IGNORE_DIRS)/" | \
-        grep -Ev '(^|/)\.' | \
-        grep -Evi "\.($IGNORE_EXT)$" | \
+        grep -Ev "\.($IGNORE_EXT)$" | \
         sort | \
     while read -r file; do
+        # Skip output file
+        [ "$(cd "$(dirname "$file")" && pwd)/$(basename "$file")" = "$OUTPUT_ABS" ] && continue
         echo "### FILE: $file ###" >> "$OUTPUT"
         echo "" >> "$OUTPUT"
         cat "$file" >> "$OUTPUT"
