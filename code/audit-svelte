@@ -15,35 +15,15 @@ echo "📍 Project: Svelte/SvelteKit"
 echo ""
 
 # ===========================================
-# Setup: Check and install dependencies
+# Setup: Temporary config (cleaned up at end)
 # ===========================================
 
-# Prefer local installation if package.json exists
-if [ -f package.json ]; then
-    # Check if dependencies are in package.json
-    if ! grep -q '"dependency-cruiser"' package.json 2>/dev/null; then
-        echo "📦 Installing dependency-cruiser locally..."
-        bun add -d dependency-cruiser
-    fi
-    if ! grep -q '"knip"' package.json 2>/dev/null; then
-        echo "📦 Installing knip locally..."
-        bun add -d knip
-    fi
-else
-    # No package.json - install globally
-    if ! command -v depcruise &> /dev/null; then
-        echo "🌍 Installing dependency-cruiser globally..."
-        bun install -g dependency-cruiser
-    fi
-    if ! command -v knip &> /dev/null; then
-        echo "🌍 Installing knip globally..."
-        bun install -g knip
-    fi
-fi
+# Track if we created the config (for cleanup)
+CREATED_CONFIG=false
 
-# Create dependency-cruiser config if it doesn't exist
+# Create dependency-cruiser config temporarily
 if [ ! -f .dependency-cruiser.cjs ] && [ ! -f .dependency-cruiser.js ]; then
-    echo "📝 Creating .dependency-cruiser.cjs..."
+    CREATED_CONFIG=true
     cat > .dependency-cruiser.cjs << 'EOF'
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
@@ -73,7 +53,6 @@ module.exports = {
   },
 };
 EOF
-    echo "   ✓ .dependency-cruiser.cjs created"
 fi
 
 echo ""
@@ -191,3 +170,10 @@ echo "   5. cat audit/audit-knip.txt                 (dead code)"
 echo "   6. open audit/audit-depcruiser-graph.svg    (graph: TS/JS only)"
 echo "   7. open audit/audit-madge-graph.svg         (graph: with .svelte)"
 echo ""
+
+# -------------------------------------------
+# Cleanup: Remove temporary config
+# -------------------------------------------
+if [ "$CREATED_CONFIG" = true ]; then
+    rm -f .dependency-cruiser.cjs
+fi
