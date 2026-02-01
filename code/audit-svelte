@@ -1,0 +1,96 @@
+#!/bin/bash
+
+# ===========================================
+# 🔍 Svelte/SvelteKit Project Audit
+# ===========================================
+# Usage: ./audit-svelte
+# ===========================================
+
+PKG="bunx"
+
+# Folders to ignore in tree
+IGNORE="node_modules|.git|dist|build|.next|.nuxt|.output|.history|coverage|.cache|.turbo|.svelte-kit|.vercel|__pycache__|audit"
+
+echo "📍 Project: Svelte/SvelteKit"
+echo ""
+echo "🚀 Starting audit..."
+echo ""
+
+# Create folder
+mkdir -p audit
+
+# 📁 Tree
+echo "📁 Generating file tree..."
+if command -v tree &> /dev/null; then
+    tree -I "$IGNORE" --dirsfirst -a > audit/audit-tree.txt
+    echo "   ✓ audit/audit-tree.txt"
+else
+    echo "   ⚠️  'tree' not installed"
+    echo "   💡 brew install tree"
+fi
+
+# 🔍 Svelte Check
+echo "🔍 Running svelte-check..."
+$PKG svelte-check --output human > audit/audit-check.txt 2>&1
+
+ERROR_COUNT=$(grep -c "^Error:" audit/audit-check.txt 2>/dev/null || echo "0")
+WARN_COUNT=$(grep -c "^Warn:" audit/audit-check.txt 2>/dev/null || echo "0")
+
+if [ "$ERROR_COUNT" -gt 0 ]; then
+    echo "   ⚠️  audit/audit-check.txt ($ERROR_COUNT errors, $WARN_COUNT warnings)"
+else
+    echo "   ✓ audit/audit-check.txt ($WARN_COUNT warnings)"
+fi
+
+# 🕸️ Dependency Cruiser (Graph + Circular)
+echo "🕸️  Generating dependency graph..."
+if command -v dot &> /dev/null; then
+    $PKG depcruise src --include-only "^src" --output-type dot 2>/dev/null | dot -T svg > audit/audit-graph.svg 2>/dev/null
+    echo "   ✓ audit/audit-graph.svg"
+else
+    echo "   ⚠️  Graphviz not installed"
+    echo "   💡 brew install graphviz"
+fi
+
+# 🔄 Circular
+echo "🔄 Checking circular dependencies..."
+$PKG depcruise src --include-only "^src" --output-type err > audit/audit-circular.txt 2>&1
+
+if grep -q "circular" audit/audit-circular.txt 2>/dev/null; then
+    CIRCULAR_COUNT=$(grep -c "circular" audit/audit-circular.txt 2>/dev/null || echo "?")
+    echo "   ⚠️  audit/audit-circular.txt ($CIRCULAR_COUNT found)"
+else
+    echo "   ✓ audit/audit-circular.txt (none 🎉)"
+fi
+
+# 📊 JSON
+echo "📊 Exporting dependencies..."
+$PKG depcruise src --include-only "^src" --output-type json > audit/audit-deps.json 2>/dev/null
+echo "   ✓ audit/audit-deps.json"
+
+# 🔬 Knip
+echo "🔬 Running Knip..."
+$PKG knip > audit/audit-knip.txt 2>&1
+
+UNUSED_FILES=$(grep -c "^src/" audit/audit-knip.txt 2>/dev/null || echo "0")
+UNUSED_DEPS=$(grep -c "package.json" audit/audit-knip.txt 2>/dev/null || echo "0")
+
+echo "   ✓ audit/audit-knip.txt ($UNUSED_FILES files, $UNUSED_DEPS deps)"
+
+# -------------------------------------------
+# Summary
+# -------------------------------------------
+echo ""
+echo "==========================================="
+echo "✅ Audit complete!"
+echo "==========================================="
+echo ""
+ls -lh audit/
+echo ""
+
+echo "📌 Next steps:"
+echo "   1. cat audit/audit-check.txt     (type errors)"
+echo "   2. cat audit/audit-circular.txt  (circular dependencies)"
+echo "   3. cat audit/audit-knip.txt      (dead code)"
+echo "   4. open audit/audit-graph.svg    (visual)"
+echo ""

@@ -13,6 +13,7 @@ if [ -z "$1" ]; then
 fi
 
 SCRIPT="$1"
+SCRIPT_NAME=$(basename "$SCRIPT")
 
 if [ ! -f "$SCRIPT" ]; then
     echo "❌ Arquivo '$SCRIPT' não encontrado"
@@ -23,6 +24,6 @@ fi
 chmod +x "$SCRIPT"
 
 # Cria symlink
-sudo ln -sf "$(pwd)/$SCRIPT" "/usr/local/bin/$SCRIPT"
+sudo ln -sf "$(pwd)/$SCRIPT" "/usr/local/bin/$SCRIPT_NAME"
 
-echo "✅ '$SCRIPT' instalado em /usr/local/bin/$SCRIPT"
+echo "✅ '$SCRIPT_NAME' instalado em /usr/local/bin/$SCRIPT_NAME"
