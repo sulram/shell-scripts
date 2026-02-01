@@ -1,0 +1,143 @@
+#!/bin/bash
+
+# ===========================================
+# 🔍 Auditoria de Projeto JS/TS
+# ===========================================
+# Uso: ./audit.sh [entry-point]
+# Exemplo: ./audit.sh src/main.tsx
+# ===========================================
+
+# -------------------------------------------
+# Configuração
+# -------------------------------------------
+
+# Entry point (argumento ou auto-detecta)
+if [ -n "$1" ]; then
+    ENTRY="$1"
+else
+    # Auto-detecta entry points comuns
+    if [ -f "src/index.tsx" ]; then
+        ENTRY="src/index.tsx"
+    elif [ -f "src/index.ts" ]; then
+        ENTRY="src/index.ts"
+    elif [ -f "src/main.tsx" ]; then
+        ENTRY="src/main.tsx"
+    elif [ -f "src/main.ts" ]; then
+        ENTRY="src/main.ts"
+    elif [ -f "src/main.js" ]; then
+        ENTRY="src/main.js"
+    elif [ -f "src/App.tsx" ]; then
+        ENTRY="src/App.tsx"
+    elif [ -f "src/App.svelte" ]; then
+        ENTRY="src/App.svelte"
+    elif [ -f "src/routes/+layout.svelte" ]; then
+        ENTRY="src/routes/+layout.svelte"
+    elif [ -f "app/layout.tsx" ]; then
+        ENTRY="app/layout.tsx"
+    elif [ -f "pages/_app.tsx" ]; then
+        ENTRY="pages/_app.tsx"
+    else
+        echo "❌ Não encontrei entry point. Use: ./audit.sh src/seu-entry.tsx"
+        exit 1
+    fi
+fi
+
+echo "📍 Entry point: $ENTRY"
+
+# Detecta package manager
+# if [ -f "bun.lockb" ]; then
+#     PKG="bunx"
+# elif [ -f "pnpm-lock.yaml" ]; then
+#     PKG="pnpm dlx"
+# elif [ -f "yarn.lock" ]; then
+#     PKG="yarn dlx"
+# else
+#     PKG="npx"
+# fi
+
+PKG="bunx"
+
+echo "📦 Package manager: $PKG"
+
+# Pastas a ignorar no tree
+IGNORE="node_modules|.git|dist|build|.next|.nuxt|.output|.history|coverage|.cache|.turbo|.svelte-kit|.vercel|__pycache__"
+
+# -------------------------------------------
+# Execução
+# -------------------------------------------
+
+echo ""
+echo "🚀 Iniciando auditoria..."
+echo ""
+
+# Cria pasta
+mkdir -p audit
+
+# 📁 Árvore
+echo "📁 Gerando árvore de arquivos..."
+if command -v tree &> /dev/null; then
+    tree -I "$IGNORE" --dirsfirst -a > audit/audit-tree.txt
+    echo "   ✓ audit/audit-tree.txt"
+else
+    echo "   ⚠️  'tree' não instalado. Pulando..."
+    echo "   💡 Instale com: brew install tree (mac) ou apt install tree (linux)"
+fi
+
+# 🕸️ Grafo visual
+echo "🕸️  Gerando grafo visual..."
+if command -v gvpr &> /dev/null; then
+    $PKG madge --image audit/audit-graph.svg "$ENTRY" 2>/dev/null
+    echo "   ✓ audit/audit-graph.svg"
+else
+    echo "   ⚠️  Graphviz não instalado. Pulando grafo visual..."
+    echo "   💡 Instale com: brew install graphviz (mac) ou apt install graphviz (linux)"
+fi
+
+# 📊 JSON
+echo "📊 Exportando dependências em JSON..."
+$PKG madge --json "$ENTRY" > audit/audit-deps.json 2>/dev/null
+echo "   ✓ audit/audit-deps.json"
+
+# 🔄 Circulares
+echo "🔄 Verificando dependências circulares..."
+$PKG madge --circular "$ENTRY" > audit/audit-circular.txt 2>/dev/null
+if [ -s audit/audit-circular.txt ]; then
+    CIRCULAR_COUNT=$(grep -c "→\|>" audit/audit-circular.txt 2>/dev/null || echo "?")
+    echo "   ⚠️  audit/audit-circular.txt ($CIRCULAR_COUNT encontradas)"
+else
+    echo "   ✓ audit/audit-circular.txt (nenhuma 🎉)"
+fi
+
+# 👻 Órfãos
+echo "👻 Buscando arquivos órfãos..."
+$PKG madge --orphans "$ENTRY" > audit/audit-orphans.txt 2>/dev/null
+ORPHAN_COUNT=$(wc -l < audit/audit-orphans.txt 2>/dev/null | tr -d ' ')
+echo "   ✓ audit/audit-orphans.txt ($ORPHAN_COUNT arquivos)"
+
+# 📈 Resumo
+echo "📈 Gerando resumo..."
+$PKG madge --summary "$ENTRY" > audit/audit-summary.txt 2>/dev/null
+echo "   ✓ audit/audit-summary.txt"
+
+# 🔬 Knip
+echo "🔬 Executando Knip (pode demorar)..."
+$PKG knip > audit/audit-knip.txt 2>&1
+echo "   ✓ audit/audit-knip.txt"
+
+# -------------------------------------------
+# Resumo
+# -------------------------------------------
+echo ""
+echo "==========================================="
+echo "✅ Auditoria completa!"
+echo "==========================================="
+echo ""
+ls -lah audit/
+echo ""
+cat audit/audit-summary.txt 2>/dev/null
+echo ""
+echo "📌 Próximos passos:"
+echo "   1. cat audit/audit-circular.txt  (crítico)"
+echo "   2. cat audit/audit-knip.txt      (limpeza)"
+echo "   3. open audit/audit-graph.svg    (visual)"
+echo ""
