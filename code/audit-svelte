@@ -13,6 +13,70 @@ IGNORE="node_modules|.git|dist|build|.next|.nuxt|.output|.history|coverage|.cach
 
 echo "📍 Project: Svelte/SvelteKit"
 echo ""
+
+# ===========================================
+# Setup: Check and install dependencies
+# ===========================================
+
+# Prefer local installation if package.json exists
+if [ -f package.json ]; then
+    # Check if dependencies are in package.json
+    if ! grep -q '"dependency-cruiser"' package.json 2>/dev/null; then
+        echo "📦 Installing dependency-cruiser locally..."
+        bun add -d dependency-cruiser
+    fi
+    if ! grep -q '"knip"' package.json 2>/dev/null; then
+        echo "📦 Installing knip locally..."
+        bun add -d knip
+    fi
+else
+    # No package.json - install globally
+    if ! command -v depcruise &> /dev/null; then
+        echo "🌍 Installing dependency-cruiser globally..."
+        bun install -g dependency-cruiser
+    fi
+    if ! command -v knip &> /dev/null; then
+        echo "🌍 Installing knip globally..."
+        bun install -g knip
+    fi
+fi
+
+# Create dependency-cruiser config if it doesn't exist
+if [ ! -f .dependency-cruiser.cjs ] && [ ! -f .dependency-cruiser.js ]; then
+    echo "📝 Creating .dependency-cruiser.cjs..."
+    cat > .dependency-cruiser.cjs << 'EOF'
+/** @type {import('dependency-cruiser').IConfiguration} */
+module.exports = {
+  forbidden: [],
+  options: {
+    doNotFollow: {
+      path: 'node_modules',
+    },
+    // Exclude .svelte files to avoid Svelte 5 parsing errors
+    exclude: {
+      path: '\\.svelte$',
+    },
+    tsPreCompilationDeps: true,
+    tsConfig: {
+      fileName: './tsconfig.json',
+    },
+    enhancedResolveOptions: {
+      exportsFields: ['exports'],
+      conditionNames: ['import', 'require', 'node', 'default', 'types'],
+      mainFields: ['module', 'main', 'types', 'typings'],
+    },
+    reporterOptions: {
+      dot: {
+        collapsePattern: 'node_modules/(@[^/]+/[^/]+|[^/]+)',
+      },
+    },
+  },
+};
+EOF
+    echo "   ✓ .dependency-cruiser.cjs created"
+fi
+
+echo ""
 echo "🚀 Starting audit..."
 echo ""
 
@@ -43,30 +107,60 @@ else
 fi
 
 # 🕸️ Dependency Cruiser (Graph + Circular)
-echo "🕸️  Generating dependency graph..."
+echo "🕸️  Generating dependency graph (depcruiser)..."
 if command -v dot &> /dev/null; then
-    $PKG depcruise src --include-only "^src" --output-type dot 2>/dev/null | dot -T svg > audit/audit-graph.svg 2>/dev/null
-    echo "   ✓ audit/audit-graph.svg"
+    $PKG depcruise src --include-only "^src" --output-type dot 2>/dev/null | dot -T svg > audit/audit-depcruiser-graph.svg 2>/dev/null
+    echo "   ✓ audit-depcruiser-graph.svg (TS/JS only)"
 else
     echo "   ⚠️  Graphviz not installed"
     echo "   💡 brew install graphviz"
 fi
 
 # 🔄 Circular
-echo "🔄 Checking circular dependencies..."
-$PKG depcruise src --include-only "^src" --output-type err > audit/audit-circular.txt 2>&1
+echo "🔄 Checking circular dependencies (depcruiser)..."
+$PKG depcruise src --include-only "^src" --output-type err > audit/audit-depcruiser-circular.txt 2>&1
 
-if grep -q "circular" audit/audit-circular.txt 2>/dev/null; then
-    CIRCULAR_COUNT=$(grep -c "circular" audit/audit-circular.txt 2>/dev/null || echo "?")
-    echo "   ⚠️  audit/audit-circular.txt ($CIRCULAR_COUNT found)"
+if grep -q "circular" audit/audit-depcruiser-circular.txt 2>/dev/null; then
+    CIRCULAR_COUNT=$(grep -c "circular" audit/audit-depcruiser-circular.txt 2>/dev/null || echo "?")
+    echo "   ⚠️  audit-depcruiser-circular.txt ($CIRCULAR_COUNT found)"
 else
-    echo "   ✓ audit/audit-circular.txt (none 🎉)"
+    echo "   ✓ audit-depcruiser-circular.txt (none 🎉)"
 fi
 
 # 📊 JSON
-echo "📊 Exporting dependencies..."
-$PKG depcruise src --include-only "^src" --output-type json > audit/audit-deps.json 2>/dev/null
-echo "   ✓ audit/audit-deps.json"
+echo "📊 Exporting dependencies (depcruiser)..."
+$PKG depcruise src --include-only "^src" --output-type json > audit/audit-depcruiser-deps.json 2>/dev/null
+echo "   ✓ audit-depcruiser-deps.json"
+
+# ===========================================
+# Madge: Analysis INCLUDING .svelte files
+# ===========================================
+
+# 🎨 Madge Graph (with Svelte)
+echo "🎨 Generating full graph (madge)..."
+if command -v dot &> /dev/null; then
+    $PKG madge --extensions ts,js,svelte src/ --image audit/audit-madge-graph.svg 2>/dev/null
+    echo "   ✓ audit-madge-graph.svg (with .svelte)"
+else
+    echo "   ⚠️  Graphviz not installed"
+    echo "   💡 brew install graphviz"
+fi
+
+# 🔄 Madge Circular (with Svelte)
+echo "🔄 Checking circular (madge)..."
+$PKG madge --extensions ts,js,svelte --circular src/ > audit/audit-madge-circular.txt 2>&1
+
+if grep -q "Found.*circular" audit/audit-madge-circular.txt 2>/dev/null; then
+    CIRCULAR_FULL=$(grep -oP "Found \K\d+" audit/audit-madge-circular.txt 2>/dev/null || echo "?")
+    echo "   ⚠️  audit-madge-circular.txt ($CIRCULAR_FULL found)"
+else
+    echo "   ✓ audit-madge-circular.txt (none 🎉)"
+fi
+
+# 📈 Madge Summary (with Svelte)
+echo "📈 Generating summary (madge)..."
+$PKG madge --extensions ts,js,svelte --summary src/ > audit/audit-madge-summary.txt 2>&1
+echo "   ✓ audit-madge-summary.txt"
 
 # 🔬 Knip
 echo "🔬 Running Knip..."
@@ -89,8 +183,11 @@ ls -lh audit/
 echo ""
 
 echo "📌 Next steps:"
-echo "   1. cat audit/audit-check.txt     (type errors)"
-echo "   2. cat audit/audit-circular.txt  (circular dependencies)"
-echo "   3. cat audit/audit-knip.txt      (dead code)"
-echo "   4. open audit/audit-graph.svg    (visual)"
+echo "   1. cat audit/audit-check.txt                (type errors)"
+echo "   2. cat audit/audit-depcruiser-circular.txt  (circular: TS/JS only)"
+echo "   3. cat audit/audit-madge-circular.txt       (circular: with .svelte)"
+echo "   4. cat audit/audit-madge-summary.txt        (statistics)"
+echo "   5. cat audit/audit-knip.txt                 (dead code)"
+echo "   6. open audit/audit-depcruiser-graph.svg    (graph: TS/JS only)"
+echo "   7. open audit/audit-madge-graph.svg         (graph: with .svelte)"
 echo ""
