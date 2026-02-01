@@ -1,71 +1,68 @@
 #!/bin/bash
 
 # ===========================================
-# 🔍 Auditoria de Projeto JS/TS
+# 🔍 Auditoria de Projeto JS/TS/Svelte
 # ===========================================
-# Uso: ./audit.sh [entry-point]
-# Exemplo: ./audit.sh src/main.tsx
+# Uso: ./audit [entry-point]
+# Exemplo: ./audit src/main.tsx
 # ===========================================
-
-# -------------------------------------------
-# Configuração
-# -------------------------------------------
-
-# Entry point (argumento ou auto-detecta)
-if [ -n "$1" ]; then
-    ENTRY="$1"
-else
-    # Auto-detecta entry points comuns
-    if [ -f "src/index.tsx" ]; then
-        ENTRY="src/index.tsx"
-    elif [ -f "src/index.ts" ]; then
-        ENTRY="src/index.ts"
-    elif [ -f "src/main.tsx" ]; then
-        ENTRY="src/main.tsx"
-    elif [ -f "src/main.ts" ]; then
-        ENTRY="src/main.ts"
-    elif [ -f "src/main.js" ]; then
-        ENTRY="src/main.js"
-    elif [ -f "src/App.tsx" ]; then
-        ENTRY="src/App.tsx"
-    elif [ -f "src/App.svelte" ]; then
-        ENTRY="src/App.svelte"
-    elif [ -f "src/routes/+layout.svelte" ]; then
-        ENTRY="src/routes/+layout.svelte"
-    elif [ -f "app/layout.tsx" ]; then
-        ENTRY="app/layout.tsx"
-    elif [ -f "pages/_app.tsx" ]; then
-        ENTRY="pages/_app.tsx"
-    else
-        echo "❌ Não encontrei entry point. Use: ./audit.sh src/seu-entry.tsx"
-        exit 1
-    fi
-fi
-
-echo "📍 Entry point: $ENTRY"
-
-# Detecta package manager
-# if [ -f "bun.lockb" ]; then
-#     PKG="bunx"
-# elif [ -f "pnpm-lock.yaml" ]; then
-#     PKG="pnpm dlx"
-# elif [ -f "yarn.lock" ]; then
-#     PKG="yarn dlx"
-# else
-#     PKG="npx"
-# fi
 
 PKG="bunx"
 
-echo "📦 Package manager: $PKG"
-
 # Pastas a ignorar no tree
-IGNORE="node_modules|.git|dist|build|.next|.nuxt|.output|.history|coverage|.cache|.turbo|.svelte-kit|.vercel|__pycache__"
+IGNORE="node_modules|.git|dist|build|.next|.nuxt|.output|.history|coverage|.cache|.turbo|.svelte-kit|.vercel|__pycache__|audit"
 
 # -------------------------------------------
-# Execução
+# Detecta tipo de projeto
+# -------------------------------------------
+detect_project_type() {
+    if [ -f "svelte.config.js" ] || [ -f "svelte.config.ts" ]; then
+        echo "svelte"
+    else
+        echo "js"
+    fi
+}
+
+# -------------------------------------------
+# Detecta entry point
+# -------------------------------------------
+detect_entry() {
+    if [ -n "$1" ]; then
+        echo "$1"
+    elif [ -f "src/index.tsx" ]; then
+        echo "src/index.tsx"
+    elif [ -f "src/index.ts" ]; then
+        echo "src/index.ts"
+    elif [ -f "src/main.tsx" ]; then
+        echo "src/main.tsx"
+    elif [ -f "src/main.ts" ]; then
+        echo "src/main.ts"
+    elif [ -f "src/main.js" ]; then
+        echo "src/main.js"
+    elif [ -f "src/App.tsx" ]; then
+        echo "src/App.tsx"
+    elif [ -f "src/App.svelte" ]; then
+        echo "src/App.svelte"
+    elif [ -f "src/routes/+layout.svelte" ]; then
+        echo "src/routes/+layout.svelte"
+    elif [ -f "app/layout.tsx" ]; then
+        echo "app/layout.tsx"
+    elif [ -f "pages/_app.tsx" ]; then
+        echo "pages/_app.tsx"
+    else
+        echo ""
+    fi
+}
+
+# -------------------------------------------
+# Main
 # -------------------------------------------
 
+PROJECT_TYPE=$(detect_project_type)
+ENTRY=$(detect_entry "$1")
+
+echo "📍 Projeto: $PROJECT_TYPE"
+echo "📍 Entry point: ${ENTRY:-"(não detectado)"}"
 echo ""
 echo "🚀 Iniciando auditoria..."
 echo ""
@@ -79,50 +76,83 @@ if command -v tree &> /dev/null; then
     tree -I "$IGNORE" --dirsfirst -a > audit/audit-tree.txt
     echo "   ✓ audit/audit-tree.txt"
 else
-    echo "   ⚠️  'tree' não instalado. Pulando..."
-    echo "   💡 Instale com: brew install tree (mac) ou apt install tree (linux)"
+    echo "   ⚠️  'tree' não instalado"
+    echo "   💡 brew install tree"
 fi
 
-# 🕸️ Grafo visual
-echo "🕸️  Gerando grafo visual..."
-if command -v gvpr &> /dev/null; then
-    $PKG madge --image audit/audit-graph.svg "$ENTRY" 2>/dev/null
-    echo "   ✓ audit/audit-graph.svg"
+# -------------------------------------------
+# Svelte: usa svelte-check
+# -------------------------------------------
+if [ "$PROJECT_TYPE" = "svelte" ]; then
+    
+    # 🔍 Svelte Check
+    echo "🔍 Executando svelte-check..."
+    $PKG svelte-check --output human > audit/audit-check.txt 2>&1
+    
+    ERROR_COUNT=$(grep -c "^Error:" audit/audit-check.txt 2>/dev/null || echo "0")
+    WARN_COUNT=$(grep -c "^Warn:" audit/audit-check.txt 2>/dev/null || echo "0")
+    
+    if [ "$ERROR_COUNT" -gt 0 ]; then
+        echo "   ⚠️  audit/audit-check.txt ($ERROR_COUNT erros, $WARN_COUNT warnings)"
+    else
+        echo "   ✓ audit/audit-check.txt ($WARN_COUNT warnings)"
+    fi
+
+# -------------------------------------------
+# JS/TS: usa madge
+# -------------------------------------------
 else
-    echo "   ⚠️  Graphviz não instalado. Pulando grafo visual..."
-    echo "   💡 Instale com: brew install graphviz (mac) ou apt install graphviz (linux)"
+    if [ -z "$ENTRY" ]; then
+        echo "   ⚠️  Entry point não detectado, pulando madge..."
+    else
+        # 🕸️ Grafo visual
+        echo "🕸️  Gerando grafo visual..."
+        if command -v gvpr &> /dev/null; then
+            $PKG madge --image audit/audit-graph.svg "$ENTRY" 2>/dev/null
+            echo "   ✓ audit/audit-graph.svg"
+        else
+            echo "   ⚠️  Graphviz não instalado"
+            echo "   💡 brew install graphviz"
+        fi
+
+        # 📊 JSON
+        echo "📊 Exportando dependências..."
+        $PKG madge --json "$ENTRY" > audit/audit-deps.json 2>/dev/null
+        echo "   ✓ audit/audit-deps.json"
+
+        # 🔄 Circulares
+        echo "🔄 Verificando circulares..."
+        $PKG madge --circular "$ENTRY" > audit/audit-circular.txt 2>/dev/null
+        if grep -q "→\|>" audit/audit-circular.txt 2>/dev/null; then
+            CIRCULAR_COUNT=$(grep -c "→\|>" audit/audit-circular.txt 2>/dev/null || echo "?")
+            echo "   ⚠️  audit/audit-circular.txt ($CIRCULAR_COUNT encontradas)"
+        else
+            echo "   ✓ audit/audit-circular.txt (nenhuma 🎉)"
+        fi
+
+        # 👻 Órfãos
+        echo "👻 Buscando órfãos..."
+        $PKG madge --orphans "$ENTRY" > audit/audit-orphans.txt 2>/dev/null
+        ORPHAN_COUNT=$(grep -c "." audit/audit-orphans.txt 2>/dev/null || echo "0")
+        echo "   ✓ audit/audit-orphans.txt ($ORPHAN_COUNT arquivos)"
+
+        # 📈 Resumo
+        echo "📈 Gerando resumo..."
+        $PKG madge --summary "$ENTRY" > audit/audit-summary.txt 2>/dev/null
+        echo "   ✓ audit/audit-summary.txt"
+    fi
 fi
 
-# 📊 JSON
-echo "📊 Exportando dependências em JSON..."
-$PKG madge --json "$ENTRY" > audit/audit-deps.json 2>/dev/null
-echo "   ✓ audit/audit-deps.json"
-
-# 🔄 Circulares
-echo "🔄 Verificando dependências circulares..."
-$PKG madge --circular "$ENTRY" > audit/audit-circular.txt 2>/dev/null
-if [ -s audit/audit-circular.txt ]; then
-    CIRCULAR_COUNT=$(grep -c "→\|>" audit/audit-circular.txt 2>/dev/null || echo "?")
-    echo "   ⚠️  audit/audit-circular.txt ($CIRCULAR_COUNT encontradas)"
-else
-    echo "   ✓ audit/audit-circular.txt (nenhuma 🎉)"
-fi
-
-# 👻 Órfãos
-echo "👻 Buscando arquivos órfãos..."
-$PKG madge --orphans "$ENTRY" > audit/audit-orphans.txt 2>/dev/null
-ORPHAN_COUNT=$(wc -l < audit/audit-orphans.txt 2>/dev/null | tr -d ' ')
-echo "   ✓ audit/audit-orphans.txt ($ORPHAN_COUNT arquivos)"
-
-# 📈 Resumo
-echo "📈 Gerando resumo..."
-$PKG madge --summary "$ENTRY" > audit/audit-summary.txt 2>/dev/null
-echo "   ✓ audit/audit-summary.txt"
-
-# 🔬 Knip
-echo "🔬 Executando Knip (pode demorar)..."
+# -------------------------------------------
+# Knip (funciona pra todos)
+# -------------------------------------------
+echo "🔬 Executando Knip..."
 $PKG knip > audit/audit-knip.txt 2>&1
-echo "   ✓ audit/audit-knip.txt"
+
+UNUSED_FILES=$(grep -c "^src/" audit/audit-knip.txt 2>/dev/null || echo "0")
+UNUSED_DEPS=$(grep -c "package.json" audit/audit-knip.txt 2>/dev/null || echo "0")
+
+echo "   ✓ audit/audit-knip.txt ($UNUSED_FILES arquivos, $UNUSED_DEPS deps)"
 
 # -------------------------------------------
 # Resumo
@@ -132,12 +162,18 @@ echo "==========================================="
 echo "✅ Auditoria completa!"
 echo "==========================================="
 echo ""
-ls -lah audit/
+ls -lh audit/
 echo ""
-cat audit/audit-summary.txt 2>/dev/null
-echo ""
-echo "📌 Próximos passos:"
-echo "   1. cat audit/audit-circular.txt  (crítico)"
-echo "   2. cat audit/audit-knip.txt      (limpeza)"
-echo "   3. open audit/audit-graph.svg    (visual)"
+
+# Mostra resumo relevante
+if [ "$PROJECT_TYPE" = "svelte" ]; then
+    echo "📌 Próximos passos:"
+    echo "   1. cat audit/audit-check.txt   (erros de tipo)"
+    echo "   2. cat audit/audit-knip.txt    (código morto)"
+else
+    echo "📌 Próximos passos:"
+    echo "   1. cat audit/audit-circular.txt  (crítico)"
+    echo "   2. cat audit/audit-knip.txt      (limpeza)"
+    echo "   3. open audit/audit-graph.svg    (visual)"
+fi
 echo ""
