@@ -45,20 +45,25 @@ detect_entry() {
 
 ENTRY=$(detect_entry "$1")
 
+# Timestamp for this audit run
+TIMESTAMP=$(date +%Y-%m-%d-%H-%M)
+AUDIT_DIR="audit/$TIMESTAMP"
+
 echo "📍 Project: JS/TS/React"
 echo "📍 Entry point: ${ENTRY:-"(not detected)"}"
+echo "📍 Timestamp: $TIMESTAMP"
 echo ""
 echo "🚀 Starting audit..."
 echo ""
 
-# Create folder
-mkdir -p audit
+# Create folder with timestamp
+mkdir -p "$AUDIT_DIR"
 
 # 📁 Tree
 echo "📁 Generating file tree..."
 if command -v tree &> /dev/null; then
-    tree -I "$IGNORE" --dirsfirst -a > audit/audit-tree.txt
-    echo "   ✓ audit/audit-tree.txt"
+    tree -I "$IGNORE" --dirsfirst -a > $AUDIT_DIR/audit-tree.txt
+    echo "   ✓ $AUDIT_DIR/audit-tree.txt"
 else
     echo "   ⚠️  'tree' not installed"
     echo "   💡 brew install tree"
@@ -70,8 +75,8 @@ else
     # 🕸️ Visual graph
     echo "🕸️  Generating visual graph..."
     if command -v gvpr &> /dev/null; then
-        $PKG madge --image audit/audit-graph.svg "$ENTRY" 2>/dev/null
-        echo "   ✓ audit/audit-graph.svg"
+        $PKG madge --image $AUDIT_DIR/audit-graph.svg "$ENTRY" 2>/dev/null
+        echo "   ✓ $AUDIT_DIR/audit-graph.svg"
     else
         echo "   ⚠️  Graphviz not installed"
         echo "   💡 brew install graphviz"
@@ -79,41 +84,35 @@ else
 
     # 📊 JSON
     echo "📊 Exporting dependencies..."
-    $PKG madge --json "$ENTRY" > audit/audit-deps.json 2>/dev/null
-    echo "   ✓ audit/audit-deps.json"
+    $PKG madge --json "$ENTRY" > $AUDIT_DIR/audit-deps.json 2>/dev/null
+    echo "   ✓ $AUDIT_DIR/audit-deps.json"
 
     # 🔄 Circular
     echo "🔄 Checking circular dependencies..."
-    $PKG madge --circular "$ENTRY" > audit/audit-circular.txt 2>/dev/null
-    if grep -q "→\|>" audit/audit-circular.txt 2>/dev/null; then
-        CIRCULAR_COUNT=$(grep -c "→\|>" audit/audit-circular.txt 2>/dev/null || echo "?")
-        echo "   ⚠️  audit/audit-circular.txt ($CIRCULAR_COUNT found)"
+    $PKG madge --circular "$ENTRY" > $AUDIT_DIR/audit-circular.txt 2>/dev/null
+    if grep -q "→\|>" $AUDIT_DIR/audit-circular.txt 2>/dev/null; then
+        CIRCULAR_COUNT=$(grep -c "→\|>" $AUDIT_DIR/audit-circular.txt 2>/dev/null || echo "?")
+        echo "   ⚠️  $AUDIT_DIR/audit-circular.txt ($CIRCULAR_COUNT found)"
     else
-        echo "   ✓ audit/audit-circular.txt (none 🎉)"
+        echo "   ✓ $AUDIT_DIR/audit-circular.txt (none 🎉)"
     fi
-
-    # 👻 Orphans
-    echo "👻 Finding orphans..."
-    $PKG madge --orphans "$ENTRY" > audit/audit-orphans.txt 2>/dev/null
-    ORPHAN_COUNT=$(grep -c "." audit/audit-orphans.txt 2>/dev/null || echo "0")
-    echo "   ✓ audit/audit-orphans.txt ($ORPHAN_COUNT files)"
 
     # 📈 Summary
     echo "📈 Generating summary..."
-    $PKG madge --summary "$ENTRY" > audit/audit-summary.txt 2>/dev/null
-    echo "   ✓ audit/audit-summary.txt"
+    $PKG madge --summary "$ENTRY" > $AUDIT_DIR/audit-summary.txt 2>/dev/null
+    echo "   ✓ $AUDIT_DIR/audit-summary.txt"
 fi
 
 # -------------------------------------------
 # Knip (works for all)
 # -------------------------------------------
 echo "🔬 Running Knip..."
-$PKG knip > audit/audit-knip.txt 2>&1
+$PKG knip > $AUDIT_DIR/audit-knip.txt 2>&1
 
-UNUSED_FILES=$(grep -c "^src/" audit/audit-knip.txt 2>/dev/null || echo "0")
-UNUSED_DEPS=$(grep -c "package.json" audit/audit-knip.txt 2>/dev/null || echo "0")
+UNUSED_FILES=$(grep -c "^src/" $AUDIT_DIR/audit-knip.txt 2>/dev/null || echo "0")
+UNUSED_DEPS=$(grep -c "package.json" $AUDIT_DIR/audit-knip.txt 2>/dev/null || echo "0")
 
-echo "   ✓ audit/audit-knip.txt ($UNUSED_FILES files, $UNUSED_DEPS deps)"
+echo "   ✓ $AUDIT_DIR/audit-knip.txt ($UNUSED_FILES files, $UNUSED_DEPS deps)"
 
 # -------------------------------------------
 # Summary
@@ -123,11 +122,11 @@ echo "==========================================="
 echo "✅ Audit complete!"
 echo "==========================================="
 echo ""
-ls -lh audit/
+ls -lh "$AUDIT_DIR"/
 echo ""
 
 echo "📌 Next steps:"
-echo "   1. cat audit/audit-circular.txt  (critical)"
-echo "   2. cat audit/audit-knip.txt      (cleanup)"
-echo "   3. open audit/audit-graph.svg    (visual)"
+echo "   1. cat $AUDIT_DIR/audit-circular.txt  (critical)"
+echo "   2. cat $AUDIT_DIR/audit-knip.txt      (cleanup)"
+echo "   3. open $AUDIT_DIR/audit-graph.svg    (visual)"
 echo ""
