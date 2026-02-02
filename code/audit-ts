@@ -49,9 +49,22 @@ ENTRY=$(detect_entry "$1")
 TIMESTAMP=$(date +%Y-%m-%d-%H-%M)
 AUDIT_DIR="audit/$TIMESTAMP"
 
+# Detect tsconfig for path aliases
+TS_CONFIG=""
+if [ -f "tsconfig.json" ]; then
+    TS_CONFIG="--ts-config tsconfig.json"
+elif [ -f "jsconfig.json" ]; then
+    TS_CONFIG="--ts-config jsconfig.json"
+fi
+
 echo "📍 Project: JS/TS/React"
 echo "📍 Entry point: ${ENTRY:-"(not detected)"}"
 echo "📍 Timestamp: $TIMESTAMP"
+if [ -n "$TS_CONFIG" ]; then
+    echo "📍 Path aliases: detected (tsconfig/jsconfig)"
+else
+    echo "📍 Path aliases: not found"
+fi
 echo ""
 echo "🚀 Starting audit..."
 echo ""
@@ -75,8 +88,10 @@ else
     # 🕸️ Visual graph
     echo "🕸️  Generating visual graph..."
     if command -v gvpr &> /dev/null; then
-        $PKG madge --image $AUDIT_DIR/audit-graph.svg "$ENTRY" 2>/dev/null
-        echo "   ✓ $AUDIT_DIR/audit-graph.svg"
+        $PKG madge $TS_CONFIG --image $AUDIT_DIR/audit-graph.svg "$ENTRY" 2>/dev/null
+        $PKG madge $TS_CONFIG --image $AUDIT_DIR/audit-graph.png "$ENTRY" 2>/dev/null
+        $PKG madge $TS_CONFIG --image $AUDIT_DIR/audit-graph.pdf "$ENTRY" 2>/dev/null
+        echo "   ✓ $AUDIT_DIR/audit-graph.{svg,png,pdf}"
     else
         echo "   ⚠️  Graphviz not installed"
         echo "   💡 brew install graphviz"
@@ -84,12 +99,12 @@ else
 
     # 📊 JSON
     echo "📊 Exporting dependencies..."
-    $PKG madge --json "$ENTRY" > $AUDIT_DIR/audit-deps.json 2>/dev/null
+    $PKG madge $TS_CONFIG --json "$ENTRY" > $AUDIT_DIR/audit-deps.json 2>/dev/null
     echo "   ✓ $AUDIT_DIR/audit-deps.json"
 
     # 🔄 Circular
     echo "🔄 Checking circular dependencies..."
-    $PKG madge --circular "$ENTRY" > $AUDIT_DIR/audit-circular.txt 2>/dev/null
+    $PKG madge $TS_CONFIG --circular "$ENTRY" > $AUDIT_DIR/audit-circular.txt 2>/dev/null
     if grep -q "→\|>" $AUDIT_DIR/audit-circular.txt 2>/dev/null; then
         CIRCULAR_COUNT=$(grep -c "→\|>" $AUDIT_DIR/audit-circular.txt 2>/dev/null || echo "?")
         echo "   ⚠️  $AUDIT_DIR/audit-circular.txt ($CIRCULAR_COUNT found)"
@@ -99,7 +114,7 @@ else
 
     # 📈 Summary
     echo "📈 Generating summary..."
-    $PKG madge --summary "$ENTRY" > $AUDIT_DIR/audit-summary.txt 2>/dev/null
+    $PKG madge $TS_CONFIG --summary "$ENTRY" > $AUDIT_DIR/audit-summary.txt 2>/dev/null
     echo "   ✓ $AUDIT_DIR/audit-summary.txt"
 fi
 
