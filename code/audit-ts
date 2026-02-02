@@ -3,8 +3,9 @@
 # ===========================================
 # 🔍 JS/TS/React Project Audit
 # ===========================================
-# Usage: ./audit-ts [entry-point]
+# Usage: ./audit-ts [entry-point] [--exportall]
 # Example: ./audit-ts src/main.tsx
+# Example: ./audit-ts src/main.tsx --exportall
 # ===========================================
 
 PKG="bunx"
@@ -40,10 +41,24 @@ detect_entry() {
 }
 
 # -------------------------------------------
+# Parse arguments
+# -------------------------------------------
+EXPORT_ALL=false
+ENTRY_ARG=""
+
+for arg in "$@"; do
+    if [ "$arg" = "--exportall" ]; then
+        EXPORT_ALL=true
+    else
+        ENTRY_ARG="$arg"
+    fi
+done
+
+# -------------------------------------------
 # Main
 # -------------------------------------------
 
-ENTRY=$(detect_entry "$1")
+ENTRY=$(detect_entry "$ENTRY_ARG")
 
 # Timestamp for this audit run
 TIMESTAMP=$(date +%Y-%m-%d-%H-%M)
@@ -88,10 +103,18 @@ else
     # 🕸️ Visual graph
     echo "🕸️  Generating visual graph..."
     if command -v gvpr &> /dev/null; then
+        # Always export SVG (default)
         $PKG madge $TS_CONFIG --image $AUDIT_DIR/audit-graph.svg "$ENTRY" 2>/dev/null
-        $PKG madge $TS_CONFIG --image $AUDIT_DIR/audit-graph.png "$ENTRY" 2>/dev/null
-        $PKG madge $TS_CONFIG --image $AUDIT_DIR/audit-graph.pdf "$ENTRY" 2>/dev/null
-        echo "   ✓ $AUDIT_DIR/audit-graph.{svg,png,pdf}"
+
+        if [ "$EXPORT_ALL" = true ]; then
+            # Export additional formats if --exportall is used
+            $PKG madge $TS_CONFIG --image $AUDIT_DIR/audit-graph.png "$ENTRY" 2>/dev/null
+            $PKG madge $TS_CONFIG --image $AUDIT_DIR/audit-graph.pdf "$ENTRY" 2>/dev/null
+            echo "   ✓ $AUDIT_DIR/audit-graph.{svg,png,pdf}"
+        else
+            echo "   ✓ $AUDIT_DIR/audit-graph.svg"
+            echo "   💡 Use --exportall to also export PNG and PDF"
+        fi
     else
         echo "   ⚠️  Graphviz not installed"
         echo "   💡 brew install graphviz"
