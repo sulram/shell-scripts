@@ -6,6 +6,8 @@ AUDIO/
   retitle-mp3.sh                  Add prefix to MP3 title metadata
 
 CODE/
+  audit-svelte                    Svelte/SvelteKit project audit and analysis
+  audit-ts                        JS/TS/React project audit and analysis
   concat                          Concatenate source files with filters
 
 IMAGE/
@@ -27,6 +29,10 @@ VIDEO/
 
 UTILS/
   fix_filenames.sh                Fix broken Unicode characters in filenames
+
+INSTALLATION/
+  install.sh                      Install script as global command
+  uninstall.sh                    Remove script from global commands
 
 USAGE
   All scripts include help: ./script.sh (without arguments)
