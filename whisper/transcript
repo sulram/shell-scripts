@@ -23,9 +23,22 @@ if [[ ! -f "$INPUT" ]]; then
   exit 1
 fi
 
+for BIN in whisper-cli ffmpeg ffprobe; do
+  if ! command -v "$BIN" >/dev/null 2>&1; then
+    echo "❌ Command not found: $BIN"
+    case "$BIN" in
+      whisper-cli) echo "   Install with: brew install whisper-cpp" ;;
+      *)           echo "   Install with: brew install ffmpeg" ;;
+    esac
+    exit 1
+  fi
+done
+
 if [[ ! -f "$MODEL" ]]; then
   echo "❌ Model not found: $MODEL"
-  echo "   Download with: curl -L -o $MODEL 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin'"
+  echo "   Download with:"
+  echo "   mkdir -p \"$(dirname "$MODEL")\""
+  echo "   curl -L -o \"$MODEL\" 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin'"
   exit 1
 fi
 
@@ -84,6 +97,7 @@ fi
 TOTAL=${#CHUNKS[@]}
 COUNTER=0
 FINAL_OUTPUT="$WORKDIR/${BASENAME}_transcript.txt"
+LOG_FILE="$WORKDIR/whisper.log"
 > "$FINAL_OUTPUT"
 
 for CHUNK in "${CHUNKS[@]}"; do
@@ -92,7 +106,7 @@ for CHUNK in "${CHUNKS[@]}"; do
   echo ""
   echo "⏳ [$COUNTER/$TOTAL] Transcribing $CHUNK_NAME..."
 
-  whisper-cli \
+  if ! whisper-cli \
     --model "$MODEL" \
     $LANG_FLAG \
     $VAD_FLAG \
@@ -102,7 +116,11 @@ for CHUNK in "${CHUNKS[@]}"; do
     -nt \
     --output-txt \
     --file "$CHUNK" \
-    --output-file "$WORKDIR/$CHUNK_NAME" 2>/dev/null
+    --output-file "$WORKDIR/$CHUNK_NAME" >/dev/null 2>"$LOG_FILE"; then
+    echo "❌ $CHUNK_NAME failed (whisper-cli exit $?). Last lines of $LOG_FILE:"
+    tail -n 10 "$LOG_FILE" | sed 's/^/   /'
+    exit 1
+  fi
 
   if [[ -f "$WORKDIR/${CHUNK_NAME}.txt" ]]; then
     # Add separator between chunks
@@ -112,14 +130,15 @@ for CHUNK in "${CHUNKS[@]}"; do
     cat "$WORKDIR/${CHUNK_NAME}.txt" >> "$FINAL_OUTPUT"
     echo "✅ $CHUNK_NAME ok"
   else
-    echo "⚠️  $CHUNK_NAME failed"
+    echo "⚠️  $CHUNK_NAME produced no output. Last lines of $LOG_FILE:"
+    tail -n 10 "$LOG_FILE" | sed 's/^/   /'
   fi
 done
 
 # --- Step 5: Cleanup intermediate files ---
 echo ""
 echo "🧹 Cleaning up intermediate files..."
-rm -f "$WORKDIR"/chunk_*.wav "$WORKDIR"/chunk_*.txt "$WAV_FILE"
+rm -f "$WORKDIR"/chunk_*.wav "$WORKDIR"/chunk_*.txt "$WAV_FILE" "$LOG_FILE"
 
 # --- Done ---
 WORD_COUNT=$(wc -w < "$FINAL_OUTPUT" | tr -d ' ')
