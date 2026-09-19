@@ -12,6 +12,7 @@ CODE/
 
 IMAGE/
   convert-format.sh               Convert between image formats (PNG→JPG)
+  mosaic.sh                       Arrange images in a grid mosaic (contain mode)
   png-crush.sh                    Optimize PNGs by removing metadata
   resize-crop-square.sh           Resize and crop to exact square
   resize-images.sh                Resize with quality/DPI control
